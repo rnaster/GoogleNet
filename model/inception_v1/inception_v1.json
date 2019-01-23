@@ -1,0 +1,54 @@
+{
+  "image": {
+    "width": 224,
+    "height": 224,
+    "channel": 3
+  },
+
+  "label": {
+    "class": 1000,
+    "isEncoding": true
+  },
+
+  "layers": {
+    "layer1": {
+      "conv1": {
+        "height": 7,
+        "width": 7,
+        "channel": 64,
+        "stride": 2
+      },
+
+      "maxpooling": {
+        "height": 3,
+        "width": 3,
+        "stride": 2,
+        "padding": "SAME"
+      },
+
+      "batchNorm": {
+
+      }
+    },
+
+    "layer2": {
+      "conv1": {
+        "height": 1,
+        "width": 1,
+        "stride": 1,
+        "channel": 64
+      },
+      "conv2": {
+        "height": 3,
+        "width": 3,
+
+        "channel": 64
+      }
+    }
+  },
+
+  "hyperparameter": {
+    "dropout": 0.3,
+    "learningrate": 1e-04
+  }
+}
