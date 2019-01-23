@@ -1,29 +1,92 @@
-# TODO: 한글주석 -> 영어로, licence
+# TODO: 한글주석 -> 영어로, licence 만들기(MIT??)
+import os
+import json
+import collections
 import tensorflow as tf
 
 
-class GoogleNet:
+class ParsingJson:
 
-    def __init__(self, address=None, seed=None):
+    def __init__(self, filename):
         """
 
-        :param address: json 형태의 architecture 가 있는 파일 주소
+        :param filename:
         """
-        self.address = address
-        self.seed = seed
 
-    def config(self):
-        # TODO: parameter 개수, architecture 보여주기
+        self.filename = filename
+
+        self.architecture = self.parsing()
+
+    def parsing(self):
+        if not self.isEmpty():
+            raise ValueError('Not Found File')
+
+        with open(self.filename) as f:
+            architecture = json.load(f,
+                                     object_pairs_hook=collections.OrderedDict)
+
+        return architecture
+
+    def isEmpty(self):
+        """
+        check existence of file
+
+        :return:
+        """
+
+        return os.path.exists(self.filename)
+
+    def specification(self):
+        # TODO: count the number of parameter, print architecture
         pass
+
+
+class GoogleNet(ParsingJson):
+
+    def __init__(self, filename, seed=None):
+        super().__init__(filename)
+
+        self.seed = seed
 
     def dataFlow(self):
         pass
 
-    def buildGraph(self):
-        # TODO: 불러온 architecture 기반으로 graph 구성
+    def train(self):
+        # TODO: 학습 후 모델 저장
+        # TODO: epoch마다 logging
         pass
 
-    def getFilter(self, shape, name, is_uniform):
+    def predict(self):
+        # 저장된 모델 불러와 test 데이터로 예측
+        pass
+
+    def buildGraph(self):
+        # TODO: 불러온 architecture 기반으로 graph 빌드
+        _image = self.architecture['image']
+
+        width, height, channel = _image['width'], \
+                                 _image['height'], \
+                                 _image['channel']
+
+        _label = self.architecture['label']
+
+        labels, isEncoding = _label['class'], \
+                             _label['isEncoding']
+
+        # label이 one-hot encoding 되있으면 class 개수, 아니면 1
+        y_dim = labels if isEncoding else 1
+
+        layers = self.architecture['layers']
+
+        inputX = tf.placeholder(tf.float32, [None, width, height, channel], name='inputX')
+        outputY = tf.placeholder(tf.float32, [None, y_dim], name='outputY')
+
+        # TODO: 필요한 인자가 있는지 확인 ex) conv: height, width, channel, stride
+        for layer in layers:
+
+            pass
+
+    def getFilters(self, shape, name, is_uniform):
         """
         Initialize weight of filter
         :param shape:
@@ -40,7 +103,7 @@ class GoogleNet:
                                shape=shape,
                                name=name)
 
-    def getWeight(self, shape, name):
+    def getWeights(self, shape, name):
         """
         Initialize normal distributed weight of fully connected layer,
         convolution bias
@@ -79,7 +142,7 @@ class GoogleNet:
         :return:
         """
 
-        filter_name = name + '_weights'
+        filter_name = 'weights'
 
         filter_shape = [
             filter_height,
@@ -88,22 +151,16 @@ class GoogleNet:
             out_channels
         ]
 
-        bias_shape = [
-            filter_height,
-            filter_width
-        ]
+        bias_name = 'bias'
 
-        bias_name = name + '_bias'
-
-        output_name = name + '_output'
+        output_name = 'dropout'
 
         layer_name = name + '_layer'
 
         with tf.variable_scope(layer_name):
-
-            filter = self.getFilter(filter_shape,
-                                    filter_name,
-                                    is_uniform)
+            filter = self.getFilters(filter_shape,
+                                     filter_name,
+                                     is_uniform)
 
             convolved = tf.nn.conv2d(input=input,
                                      filter=filter,
@@ -111,43 +168,123 @@ class GoogleNet:
                                      padding=padding,
                                      name='convolution')
 
-            convolved_bias = self.getWeight(bias_shape,
-                                            bias_name)
+            convolved_bias = self.getWeights([1, 1, 1, out_channels],
+                                             bias_name)
 
             output = tf.nn.relu(convolved + convolved_bias,
-                                output_name)
+                                'relu')
 
-            return output
+            output = self.dropOut(output, 0.3, output_name)  # TODO: 0.3 -> keep_prob으로 바꾸기
 
-    def maxPooling(self):
-        pass
+        return output
 
-    def batchNorm(self):
-        pass
+    @staticmethod
+    def maxPooling(input,
+                   filter_height,
+                   filter_width,
+                   stride,
+                   name,
+                   padding='SAME'):
+        """
 
-    def concatenation(self):
-        pass
+        :param input:
+        :param filter_height:
+        :param filter_width:
+        :param stride:
+        :param name:
+        :param padding:
+        :return:
+        """
 
-    def classifier(self):
-        pass
+        return tf.nn.max_pool(input,
+                              [1, filter_height, filter_width, 1],
+                              [1, stride, stride, 1],
+                              padding,
+                              name=name)
 
-    def averagePooling(self):
-        pass
+    @staticmethod
+    def batchNorm(input, name, is_train=True):
+        return tf.layers.batch_normalization(input,
+                                             training=is_train,
+                                             name=name)
 
-    def fullyConnectedLayer(self):
-        pass
+    def concatenation(self, output_list, name):
+        """
+        output format : [batch_size, width, height, channel]
+        concatenation by axis=3
 
-    def softMaxActivation(self):
-        pass
+        :param output_list: tensor list
+        :param name:
+        :return:
+        """
 
-    def dropOut(self):
-        pass
+        return tf.concat(output_list, axis=3, name=name)
+
+    @staticmethod
+    def averagePooling(input,
+                       filter_height,
+                       filter_width,
+                       stride,
+                       name,
+                       padding='SAME'):
+        return tf.nn.avg_pool(input,
+                              [1, filter_height, filter_width, 1],
+                              [1, stride, stride, 1],
+                              padding,
+                              name=name)
+
+    @staticmethod
+    def fullyConnectedLayer(input, num_outputs, scope, activation_fn=tf.nn.relu):
+        return tf.contrib.layers.fully_connected(input,
+                                                 num_outputs,
+                                                 activation_fn,
+                                                 scope=scope)
+
+    def getCrossEntropy(self, labels, outputs, name, isEncoding=False):
+        """
+
+        :param labels: actual Y
+        :param outputs: 예측 값; WX + B
+        :param name: ex) auxiliary_0 / main
+        :param isEncoding: one-hot encoding 여부
+        :return:
+        """
+
+        with tf.variable_scope(name):
+            if isEncoding:
+                return tf.nn.softmax_cross_entropy_with_logits_v2(labels,
+                                                                  outputs,
+                                                                  name='CrossEntropy')
+
+            return tf.nn.sparse_softmax_cross_entropy_with_logits(labels,
+                                                                  outputs,
+                                                                  'CrossEntropy')
+
+    def getLoss(self, crossEntropy, name):
+        with tf.variable_scope(name):
+            return tf.math.reduce_mean(
+                tf.math.reduce_sum(crossEntropy, 1, name='sum'),
+                name='mean'
+            )
+
+    def dropOut(self, input, keep_prob, name):
+        """
+
+        :param input:
+        :param keep_prob: element를 유지할 확률; 0.9 : 90% 확률로 element가 생존.
+        :param name:
+        :return:
+        """
+
+        return tf.nn.dropout(input,
+                             keep_prob,
+                             name=name)
 
 
 if __name__ == '__main__':
-
-    with tf.variable_scope('foo'):
-        a = tf.get_variable('bar', [1])
-    with tf.variable_scope('goo'):
-        b = tf.get_variable('bar', [2])
-    print(a, b)
+    p = ParsingJson('C:/Users/yun/Desktop/GoogleNet/model/inception_v1/inception_v1.json')
+    p.parsing()
+    _g = p.architecture['graph']
+    # for x in _g:
+    #     print(_g[x])
+    pass
