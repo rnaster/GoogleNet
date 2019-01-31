@@ -6,17 +6,19 @@
   },
 
   "label": {
-    "class": 1000,
-    "isEncoding": true
+    "class": 1000
   },
 
   "layers": {
     "layer1": {
-      "conv1": {
-        "height": 7,
-        "width": 7,
-        "channel": 64,
-        "stride": 2
+      "convolution": {
+        "conv": {
+          "height": 7,
+          "width": 7,
+          "channel": 64,
+          "stride": 2,
+          "padding": "SAME"
+        }
       },
 
       "maxpooling": {
@@ -26,29 +28,772 @@
         "padding": "SAME"
       },
 
-      "batchNorm": {
+      "batchNorm": true
+    },
+
+    "layer2": {
+      "convolution":{
+        "conv1": {
+          "height": 1,
+          "width": 1,
+          "stride": 1,
+          "channel": 64,
+          "padding": "VALID"
+        },
+
+        "conv2": {
+          "height": 3,
+          "width": 3,
+          "stride": 1,
+          "channel": 192,
+          "padding": "SAME"
+        }
+      },
+
+      "batchNorm": true,
+
+      "maxpooling": {
+        "height": 3,
+        "width": 3,
+        "stride": 2,
+        "padding": "SAME"
+      }
+    },
+
+    "layer3": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 96,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 16,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 32,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 32,
+            "padding": "SAME"
+          }
+        }
 
       }
     },
 
-    "layer2": {
-      "conv1": {
-        "height": 1,
-        "width": 1,
-        "stride": 1,
-        "channel": 64
+    "layer4": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 192,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 32,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 96,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        }
       },
-      "conv2": {
+
+      "maxpooling": {
         "height": 3,
         "width": 3,
+        "stride": 2,
+        "padding": "SAME"
+      }
+    },
 
-        "channel": 64
+    "layer5": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 192,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 96,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 208,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 16,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 48,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        }
+      },
+
+      "getLoss": {
+        "auxiliary": true,
+
+        "loss": {
+          "averagepooling": {
+            "height": 5,
+            "width": 5,
+            "stride": 3,
+            "padding": "VALID"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          },
+
+          "flatten": true,
+
+          "fc0": {
+            "num_outputs": 1024,
+            "activation_fn": "relu"
+          },
+
+          "fc1": {
+            "num_outputs": 1024,
+            "activation_fn": "relu"
+          },
+
+          "fc2": {
+            "num_outputs": 1000,
+            "activation_fn": "relu"
+          }
+        }
+      }
+    },
+
+    "layer6": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 160,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 112,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 224,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 24,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        }
+      }
+    },
+
+    "layer7": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 256,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 24,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        }
+      }
+    },
+
+    "layer8": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 112,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 144,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 288,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 32,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 64,
+            "padding": "SAME"
+          }
+        }
+      },
+
+      "getLoss": {
+        "auxiliary": true,
+
+        "loss": {
+          "averagepooling": {
+            "height": 5,
+            "width": 5,
+            "stride": 3,
+            "padding": "VALID"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          },
+
+          "flatten": true,
+
+          "fc0": {
+            "num_outputs": 1024,
+            "activation_fn": "relu"
+          },
+
+          "fc1": {
+            "num_outputs": 1024,
+            "activation_fn": "relu"
+          },
+
+          "fc2": {
+            "num_outputs": 1000,
+            "activation_fn": "relu"
+          }
+        }
+      }
+    },
+
+    "layer9": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 256,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 160,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 320,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 32,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        }
+      },
+
+      "maxpooling": {
+        "height": 3,
+        "width": 3,
+        "stride": 2,
+        "padding": "SAME"
+      }
+    },
+
+    "layer10": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 256,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 160,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 320,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 32,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        }
+      }
+    },
+
+    "layer11": {
+      "inception": {
+        "convolution0": {
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 384,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution1": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 192,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "channel": 384,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution2": {
+          "conv0": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 48,
+            "padding": "SAME"
+          },
+
+          "conv1": {
+            "height": 5,
+            "width": 5,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        },
+
+        "convolution3": {
+          "maxpooling": {
+            "height": 3,
+            "width": 3,
+            "stride": 1,
+            "padding": "SAME"
+          },
+
+          "conv": {
+            "height": 1,
+            "width": 1,
+            "stride": 1,
+            "channel": 128,
+            "padding": "SAME"
+          }
+        }
+      }
+    },
+
+    "layer12": {
+      "getLoss": {
+        "auxiliary": false,
+
+        "loss": {
+          "averagepooling": {
+            "height": 7,
+            "width": 7,
+            "stride": 1,
+            "padding": "VALID"
+          },
+
+          "flatten": true,
+
+          "fc0": {
+            "num_outputs": 1024,
+            "activation_fn": "relu"
+          },
+
+          "fc1": {
+            "num_outputs": 1000,
+            "activation_fn": "relu"
+          }
+        }
       }
     }
   },
 
   "hyperparameter": {
-    "dropout": 0.3,
-    "learningrate": 1e-04
+    "dropout": {
+      "main": 0.4,
+      "auxiliary": 0.3
+    },
+
+    "learningrate": 1e-04,
+
+    "optimizer": "SGD",
+
+    "batchSize": 128,
+
+    "epoch": 20
   }
 }
