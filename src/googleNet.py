@@ -1,13 +1,12 @@
 # TODO: 한글주석 -> 영어로, licence 만들기(MIT??)
 import tensorflow as tf
 
-from src.utils import ParsingJson
+from src.utils import ParsingJson, ImageProcessing
 
 
-class GoogleNet(ParsingJson):
+class GoogleNet:
 
     def __init__(self, filename, seed=None):
-        super().__init__(filename)
 
         self.seed = seed
         self.inputX = None
@@ -16,12 +15,15 @@ class GoogleNet(ParsingJson):
         self._dropOut_rate_main = None
         self._dropOut_rate_auxiliary = None
         self.isTrain = None
+        self.architecture = ParsingJson(filename).parsing()
 
-    def dataFlow(self, dataAddress, batchSize):
+        _image = self.architecture['image']
 
-        yield
+        self.width, self.height, self.channel = _image['width'], \
+                                                _image['height'], \
+                                                _image['channel']
 
-    def train(self, dataAddress):
+    def train(self, filename, url):
         # TODO: 학습 후 모델 저장
         # TODO: epoch마다 logging
 
@@ -46,11 +48,14 @@ class GoogleNet(ParsingJson):
             optimizer = tf.train.AdamOptimizer(_learning_rate)\
                 .minimize(self.loss)
 
+        dataset = ImageProcessing(filename, url, self.channel)\
+            .getDataset(self.height, self.width, _batchSize)
+        
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             _loss = None
             for epoch in range(1, _epoch+1):
-                for batchX, batchY in self.dataFlow(dataAddress, _batchSize):
+                for batchX, batchY in dataset:
                     _, _loss = sess.run([optimizer, self.loss],
                                         feed_dict={self.inputX: batchX,
                                                    self.outputY: batchY,
@@ -65,18 +70,17 @@ class GoogleNet(ParsingJson):
         pass
 
     def buildGraph(self):
-        _image = self.architecture['image']
-
-        width, height, channel = _image['width'], \
-                                 _image['height'], \
-                                 _image['channel']
 
         _label = self.architecture['label']
 
         num_labels = _label['class']
 
-        self.inputX = tf.placeholder(tf.float32, [None, width, height, channel], name='inputX')
-        self.outputY = tf.placeholder(tf.float32, [None, num_labels], name='outputY')
+        self.inputX = tf.placeholder(tf.float32,
+                                     [None, self.width, self.height, self.channel],
+                                     name='inputX')
+        self.outputY = tf.placeholder(tf.float32,
+                                      [None, num_labels],
+                                      name='outputY')
 
         self._dropOut_rate_main = tf.placeholder(tf.float32, name='dropOutMain')
         self._dropOut_rate_auxiliary = tf.placeholder(tf.float32, name='dropOutAuxiliary')
@@ -499,19 +503,9 @@ class GoogleNet(ParsingJson):
 if __name__ == '__main__':
     # test = GoogleNet('C:/Users/yun/Desktop/GoogleNet/model/inception_v1/inception_v1.json')
     # test.buildGraph()
-    # import numpy as np
-    # def func():
-    #     l = np.random.randint(10, size=10)
-    #     print('#######', l)
-    #     for arr in np.array_split(l, 2):
-    #         yield arr
-    # for _ in range(2):
-    #     for arr in func():
-    #         print(arr)
-    a = tf.constant(123)
-    a_ = 3
-    b = tf.placeholder(tf.int8)
-    sess = tf.Session()
-    print(sess.run(b, feed_dict={b: a_}))
-
+    # dataset1 = tf.data.Dataset.from_tensor_slices(tf.random_uniform([4, 10]))
+    # dataset2 = tf.data.Dataset.from_tensor_slices(tf.random_uniform([4, 10]))
+    # dataset3 = tf.data.Dataset.zip((dataset1, dataset2))
+    # print(dataset3.output_shapes)
+    # print(dataset3.output_types)
     pass
