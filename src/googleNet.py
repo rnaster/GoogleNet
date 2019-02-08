@@ -11,6 +11,7 @@ class GoogleNet:
         self.seed = seed
         self.inputX = None
         self.outputY = None
+        self.datasetInit = None
         self.loss = None
         self._dropOut_rate_main = None
         self._dropOut_rate_auxiliary = None
@@ -18,20 +19,23 @@ class GoogleNet:
         self.architecture = ParsingJson(filename).parsing()
 
         _image = self.architecture['image']
-
         self.width, self.height, self.channel = _image['width'], \
                                                 _image['height'], \
                                                 _image['channel']
 
-    def train(self, filename, url):
+        _hyperparameter = self.architecture['hyperparameter']
+        self.batchSize = _hyperparameter['batchSize']
+
+        self.all_image_paths = None
+        self.all_image_labels = None
+
+    def train(self):
         # TODO: 학습 후 모델 저장
         # TODO: epoch마다 logging
 
         _hyperparameter = self.architecture['hyperparameter']
 
         _optimizer = _hyperparameter['optimizer']
-
-        _batchSize = _hyperparameter['batchSize']
 
         _epoch = _hyperparameter['epoch']
 
@@ -48,18 +52,17 @@ class GoogleNet:
             optimizer = tf.train.AdamOptimizer(_learning_rate)\
                 .minimize(self.loss)
 
-        dataset = ImageProcessing(filename, url, self.channel)\
-            .getDataset(self.height, self.width, _batchSize)
+        # dataset = ImageProcessing(filename, url, self.channel)\
+        #     .getDataset(self.height, self.width, self.batchSize)
         
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             _loss = None
             for epoch in range(1, _epoch+1):
-                for batchX, batchY in dataset:
+                sess.run(self.datasetInit)
+                for step in range(len(self.all_image_paths)//self.batchSize + 1):
                     _, _loss = sess.run([optimizer, self.loss],
-                                        feed_dict={self.inputX: batchX,
-                                                   self.outputY: batchY,
-                                                   self._dropOut_rate_main: _dropOut_rate_main,
+                                        feed_dict={self._dropOut_rate_main: _dropOut_rate_main,
                                                    self._dropOut_rate_auxiliary: _dropOut_rate_auxiliary,
                                                    self.isTrain: True})
 
@@ -69,18 +72,39 @@ class GoogleNet:
         # 저장된 모델 불러와 test 데이터로 예측
         pass
 
-    def buildGraph(self):
+    def dataFlow(self, filename, url):
 
-        _label = self.architecture['label']
+        imageProcessing = ImageProcessing(filename, url, self.channel)
 
-        num_labels = _label['class']
 
-        self.inputX = tf.placeholder(tf.float32,
-                                     [None, self.width, self.height, self.channel],
-                                     name='inputX')
-        self.outputY = tf.placeholder(tf.float32,
-                                      [None, num_labels],
-                                      name='outputY')
+        dataset = imageProcessing \
+            .getDataset(self.height, self.width, self.batchSize)
+
+        self.all_image_paths = imageProcessing.all_image_paths
+        self.all_image_labels = imageProcessing.all_image_labels
+
+        iterator = dataset.make_initializable_iterator()
+
+        self.datasetInit = iterator.initializer
+
+        batchX, batchY = iterator.get_next()
+
+        return batchX, batchY
+
+    def buildGraph(self, filename, url):
+
+        # _label = self.architecture['label']
+        #
+        # num_labels = _label['class']
+
+        # self.inputX = tf.placeholder(tf.float32,
+        #                              [None, self.width, self.height, self.channel],
+        #                              name='inputX')
+        # self.outputY = tf.placeholder(tf.float32,
+        #                               [None, num_labels],
+        #                               name='outputY')
+
+        inputX, outputY = self.dataFlow(filename, url)
 
         self._dropOut_rate_main = tf.placeholder(tf.float32, name='dropOutMain')
         self._dropOut_rate_auxiliary = tf.placeholder(tf.float32, name='dropOutAuxiliary')
@@ -90,7 +114,7 @@ class GoogleNet:
         layers = self.architecture['layers']
 
         # TODO: 필요한 인자가 있는지 확인 ex) conv: height, width, channel, stride
-        previous_layer = self.inputX
+        previous_layer = inputX
 
         loss_list = []
         for layer in layers:
@@ -124,7 +148,7 @@ class GoogleNet:
                             previous_layer = self.inception(previous_layer, _inner_layer)
 
                         elif 'getLoss' in inner_layer:
-                            loss_list.append(self.getLoss(previous_layer, self.outputY, _inner_layer))
+                            loss_list.append(self.getLoss(previous_layer, outputY, _inner_layer))
 
         self.loss = self.getTotalLoss(loss_list)
 
@@ -501,11 +525,24 @@ class GoogleNet:
 
 
 if __name__ == '__main__':
-    # test = GoogleNet('C:/Users/yun/Desktop/GoogleNet/model/inception_v1/inception_v1.json')
-    # test.buildGraph()
+    test = GoogleNet('C:/Users/yun/Desktop/GoogleNet/model/inception_v1/inception_v1.json')
+    test.buildGraph('/flower_photos',
+                    'https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz')
+    test.train()
     # dataset1 = tf.data.Dataset.from_tensor_slices(tf.random_uniform([4, 10]))
     # dataset2 = tf.data.Dataset.from_tensor_slices(tf.random_uniform([4, 10]))
     # dataset3 = tf.data.Dataset.zip((dataset1, dataset2))
     # print(dataset3.output_shapes)
     # print(dataset3.output_types)
+    # a = tf.placeholder(tf.float32)
+    # _dataset = tf.data.Dataset.from_tensor_slices(a).make_initializable_iterator()
+    # X = _dataset.get_next()
+    # Y = X * 2 + 1
+    # with tf.Session() as sess:
+    #     sess.run(_dataset.initializer, feed_dict={a: [3, 4, 5]})
+    #     print(sess.run(Y))
+    #     print(sess.run(Y))
+    #     sess.run(_dataset.initializer, feed_dict={a: [3, 4, 5]})
+    #     print(sess.run(Y))
+    #     print(sess.run(Y))
     pass

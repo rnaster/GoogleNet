@@ -1,6 +1,4 @@
 # TODO: image processing은 tensorflow으로...?
-from __future__ import division
-
 import os
 import json
 import collections
@@ -76,6 +74,7 @@ class ImageProcessing:
         self.height = None
         self.width = None
         self.dataRoot = getfile(filename, url, dir_to_save)
+        self.labels = None
 
     def getAllImagePaths(self):
 
@@ -89,13 +88,19 @@ class ImageProcessing:
 
         self.label_to_index = dict((name, index) for index, name in enumerate(label_names))
 
+        self.labels = len(label_names)
+
         self.all_image_labels = [self.label_to_index[pathlib.Path(path).parent.name]
                                  for path in self.all_image_paths]
 
     def readImages(self, path, label):
         image = tf.read_file(path)
 
-        return self.preprocessImage(image), label
+        return self.preprocessImage(image), self.oneHotEncoding(label)
+
+    def oneHotEncoding(self, label):
+
+        return tf.one_hot(label, self.labels)
 
     def preprocessImage(self, image):
         image = tf.image.decode_jpeg(image,
@@ -112,16 +117,21 @@ class ImageProcessing:
         self.height = height
         self.width = width
 
-        path_ds = tf.data.Dataset \
-            .from_tensor_slices((self.all_image_paths,
-                                 self.all_image_labels))
+        # inputX = tf.placeholder(tf.string, name='inputX')
+        # outputY = tf.placeholder(tf.int8, name='outputY')
 
-        dataset = path_ds \
+        dataset = tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels))\
             .map(self.readImages, -1) \
             .shuffle(len(self.all_image_paths)) \
             .repeat() \
             .batch(batchSize) \
             .prefetch(1)
+
+        # path_ds = tf.data.Dataset \
+        #     .from_tensor_slices((self.all_image_paths,
+        #                          self.all_image_labels))
 
         return dataset
 
