@@ -1,7 +1,7 @@
 # TODO: 한글주석 -> 영어로, licence 만들기(MIT??)
 import tensorflow as tf
 
-from src.utils import ParsingJson, ImagePipeline
+from src.utils import ParsingJson, ImagePipeline, ImageAugmentation
 
 
 class GoogleNet:
@@ -14,7 +14,8 @@ class GoogleNet:
         self.datasetInit = None
         self.loss = None
         self.labels = None
-        self.accuracy = None
+        self.correct = None
+        self._batchsize = None
         self._dropOut_rate_main = None
         self._dropOut_rate_auxiliary = None
         self.isTrain = None
@@ -32,8 +33,9 @@ class GoogleNet:
 
         self.all_image_paths = None
         self.all_image_labels = None
+        self.augmentedRate = None
 
-    def getAccuracy(self, predicted, actual):
+    def getCorrect(self, predicted, actual):
         """
 
         :param predicted: softmax value
@@ -48,10 +50,10 @@ class GoogleNet:
         #                         axis=1,
         #                         name='actualLabel')
 
-        return tf.math.reduce_mean(
-            tf.math.reduce_sum(
-                tf.one_hot(predictedLabel, self.labels) * actual, axis=1
-            ), name='accuracy'
+        return tf.math.reduce_sum(
+            tf.one_hot(predictedLabel, self.labels) * actual,
+            axis=1,
+            name='correctVector'
         )
 
     def train(self):
@@ -79,17 +81,29 @@ class GoogleNet:
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            _loss, _accuracy = None, None
+            _loss = None
             for epoch in range(1, _epoch+1):
                 sess.run(self.datasetInit)
-                for step in range(len(self.all_image_paths)//self.batchSize + 1):
-                    _, _loss, _accuracy = sess.run([optimizer, self.loss, self.accuracy],
-                                                   feed_dict={self._dropOut_rate_main: _dropOut_rate_main,
-                                                              self._dropOut_rate_auxiliary: _dropOut_rate_auxiliary,
-                                                              self.isTrain: True,
-                                                              learning_rate: self.learning_rate})
+                correct = 0
+                _batchsize = 0
+                for step in range(len(self.all_image_paths) * self.augmentedRate * 10 //self.batchSize + 1):
+                    _, _loss, _correct = sess.run([optimizer,
+                                                   self.loss,
+                                                   self.correct],
+                                                  feed_dict={self._dropOut_rate_main: _dropOut_rate_main,
+                                                             self._dropOut_rate_auxiliary: _dropOut_rate_auxiliary,
+                                                             self.isTrain: True,
+                                                             learning_rate: self.learning_rate})
+                    correct += sum(_correct)
+                    _batchsize += len(_correct)
 
-                print('epoch: %s, accuracy: %s, train loss: %s' % (epoch, _accuracy, _loss))
+                print('epoch: %s,'
+                      ' dataset size: %s,'
+                      ' total accuracy: %s,'
+                      ' train loss: %s' % (epoch,
+                                           _batchsize,
+                                           correct / _batchsize,
+                                           _loss))
                 if epoch % 4 == 0: self.learning_rate *= 0.96
 
     def predict(self):
@@ -98,14 +112,19 @@ class GoogleNet:
 
     def dataFlow(self, filename, url):
 
-        imageProcessing = ImagePipeline(filename, url, self.channel)
+        # imageProcessing = ImagePipeline(filename, url, self.channel)
+        imageProcessing = ImageAugmentation(filename, url, augmentedRate=3)
 
         dataset = imageProcessing \
-            .getDataset(self.height, self.width, self.batchSize)
+            .getDataset(height=self.height,
+                        width=self.width,
+                        channel=3,
+                        batchsize=self.batchSize)
 
         self.all_image_paths = imageProcessing.all_image_paths
         self.all_image_labels = imageProcessing.all_image_labels
         self.labels = imageProcessing.labels
+        self.augmentedRate = imageProcessing.augmentedRate
 
         iterator = dataset.make_initializable_iterator()
 
@@ -498,7 +517,8 @@ class GoogleNet:
             _previous_layer = self.softmax(_previous_layer)
 
             if not config['auxiliary']:
-                self.accuracy = self.getAccuracy(_previous_layer, output)
+                self.correct = self.getCorrect(_previous_layer,
+                                               output)
 
             return self.getCrossEntropy(_previous_layer,
                                         output) * rate
@@ -518,7 +538,6 @@ class GoogleNet:
 
         :param labels: actual Y
         :param outputs: 예측 값(softmax); WX + B
-        :param name: ex) auxiliary_0 / main
         :return:
         """
 
@@ -543,10 +562,10 @@ class GoogleNet:
 
 
 if __name__ == '__main__':
-    test = GoogleNet('C:/Users/yun/Desktop/GoogleNet/model/inception_v1/inception_v1.json')
-    test.buildGraph('/flower_photos',
-                    'https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz')
-    test.train()
+    # test = GoogleNet('C:/Users/yun/Desktop/GoogleNet/model/inception_v1/inception_v1.json')
+    # test.buildGraph('/101_ObjectCategories',
+    #                 'http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz')
+    # test.train()
     # dataset1 = tf.data.Dataset.from_tensor_slices(tf.random_uniform([4, 10]))
     # dataset2 = tf.data.Dataset.from_tensor_slices(tf.random_uniform([4, 10]))
     # dataset3 = tf.data.Dataset.zip((dataset1, dataset2))
@@ -563,4 +582,5 @@ if __name__ == '__main__':
     #     sess.run(_dataset.initializer, feed_dict={a: [3, 4, 5]})
     #     print(sess.run(Y))
     #     print(sess.run(Y))
+
     pass

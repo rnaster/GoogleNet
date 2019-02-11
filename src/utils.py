@@ -3,7 +3,6 @@ import json
 import collections
 import pathlib
 import random
-import tempfile
 import tensorflow as tf
 
 
@@ -83,10 +82,10 @@ class ImagePipeline:
         self.all_image_labels = None
         self.labels = None
 
-        self.getAllImagePaths()
-        self.labeling2images()
+        self._getAllImagePaths()
+        self._labeling2images()
 
-    def getAllImagePaths(self):
+    def _getAllImagePaths(self):
 
         all_image_paths = list(self.dataRoot.glob('*/*'))
         self.all_image_paths = [str(path)
@@ -98,7 +97,7 @@ class ImagePipeline:
     #     self.all_image_shape = [PIL.Image.open(path).size
     #                             for path in self.all_image_paths]
 
-    def labeling2images(self):
+    def _labeling2images(self):
 
         label_names = sorted(item.name for item in self.dataRoot.glob('*/') if item.is_dir())
         self.label_to_index = dict((name, index) for index, name in enumerate(label_names))
@@ -130,18 +129,22 @@ class ImagePipeline:
 
         return image
 
-    def getDataset(self, height, width, channel=3, batchSize=128):
+    def getDataset(self,
+                   height,
+                   width,
+                   channel=3,
+                   batchsize=128):
         """
 
         :param height: image height to resize
         :param width: image width th resize
         :param channel:
-        :param batchSize: batch size
+        :param batchsize: batch size
         :return:
         """
 
-        self.getAllImagePaths()
-        self.labeling2images()
+        self._getAllImagePaths()
+        self._labeling2images()
 
         self.height = height
         self.width = width
@@ -153,7 +156,7 @@ class ImagePipeline:
             .map(self.readImages, -1) \
             .shuffle(len(self.all_image_paths)) \
             .repeat() \
-            .batch(batchSize) \
+            .batch(batchsize) \
             .prefetch(1)
 
         return dataset
@@ -162,6 +165,8 @@ class ImagePipeline:
 class ImageAugmentation(ImagePipeline):
     """
     augmentation, pre-processing of image
+    변환은 다른 library 사용하고 변환된 이미지를 tfrecord로 저장
+    아니면 tensorflow 이용하고 tfrecord 포기
     """
     # TODO: data augmentation 후 tfrecord로 저장
     # 크기조절(scaling), 평행이동(translation),
@@ -179,89 +184,235 @@ class ImageAugmentation(ImagePipeline):
         super().__init__(filename, url, False, dataRoot, dir_to_save)
         self.augmentedRate = augmentedRate
 
-        self.parentDir = os.path.dirname(self.dataRoot)
-        self.dirName = os.path.basename(self.dataRoot) + '_Augmented'
-        self.newDirName = self.parentDir + self.dirName
-
-        os.makedirs(self.newDirName, exist_ok=True)
-
-    def _float_feature(self, value):
-        """Returns a float_list from a float / double."""
-        return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-
-    def _int64_feature(self, value):
-        """Returns an int64_list from a bool / enum / int / uint."""
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-    def _bytes_feature(self, value):
-        """Returns a bytes_list from a string / byte."""
-        return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
     def readImages(self, path, label):
 
         return tf.image.decode_jpeg(
             tf.read_file(path),
             channels=self.channel,
             name='readRawImages'
-        ), label
+        ), self.oneHotEncoding(label)
 
     def getDataset(self, **kargs):
 
         self.height = kargs['height']
         self.width = kargs['width']
         self.channel = kargs['channel']
+        batchSize = kargs['batchsize']
 
-        for _ in range(self.augmentedRate):
-            self.augmentImages()
+        dataset = self.getRawImages()
 
-    def augmentImages(self):
+        for i in range(self.augmentedRate):
+            print('%s-th augmentation' %i)
+            # dataset = dataset.concatenate(
+            #     self.augmentedImageDataset(dataset)
+            # )
+            dataset = self.augmentedImageDataset(dataset)
 
-        self.getResizedImage()
+        return dataset \
+            .shuffle(len(self.all_image_paths)) \
+            .repeat() \
+            .batch(batchSize) \
+            .prefetch(1)
 
-    def serialize(self, image, label):
+    def getRawImages(self):
 
-        feature = {
-            'image': self._bytes_feature(image),
-            'label': self._int64_feature(label)
-        }
-        example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
-        return example_proto.SerializeToString()
-
-    def getResizedImage(self):
-
-        filename = tempfile.mktemp('.tfrecord',
-                                   dir=self.newDirName)
-        _dataset = tf.data.Dataset \
+        return tf.data.Dataset \
             .from_tensor_slices((self.all_image_paths,
                                  self.all_image_labels)) \
-            .map(self.readImages, -1)\
-            .map(self._getResizedImage, -1)\
-            .map(self.serialize, -1)
-        writer = tf.data.experimental.TFRecordWriter(filename)
-        writer.write(_dataset)
+            .map(self.readImages, -1) \
+            .map(self.getStandizeImage, -1) \
+            .map(self.getResizedImage, -1)
 
-    def _getResizedImage(self, image, label):
+    def getResizedImage(self, image, label):
 
         return tf.image \
                    .resize_images(image, [self.width,
                                           self.height]), label
+
+    def getStandizeImage(self, image, label):
+
+        return tf.image\
+                   .per_image_standardization(image), label
+
+    def augmentedImageDataset(self, dataset):
+
+        for augment in [self.getCentralImages,
+                        # self.getNoiseImages,
+                        self.getLeftRightFlipImages,
+                        self.getUpDownFlipImages,
+                        self.getRandomBrightImages,
+                        self.getRandomContrastImages,
+                        self.getRandomGammaImages,
+                        self.getRandomHueImages,
+                        self.getRandomSaturationImages,
+                        self.getRotateImages]:
+
+            dataset = dataset.concatenate(augment())
+
+        return dataset
+
+    def getCentralImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getCentralImage, -1)\
+            .map(self.getResizedImage, -1)
+
+    def _getCentralImage(self, image, label):
+
+        return tf.image \
+                   .central_crop(image,
+                                 random.random()), label
+
+    def getNoiseImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getNoiseImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getNoiseImage(self, image, label):
+
+        return tf.image \
+                   .adjust_jpeg_quality(image,
+                                        random.randrange(0, 101)), label
+
+    def getLeftRightFlipImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getLeftRightFlipImage, -1) \
+            .map(self._getRotateImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getLeftRightFlipImage(self, image, label):
+
+        return tf.image\
+            .flip_left_right(image), label
+
+    def getUpDownFlipImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getUpDownFlipImage, -1) \
+            .map(self._getRotateImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getUpDownFlipImage(self, image, label):
+
+        return tf.image \
+                   .flip_up_down(image), label
+
+    def getRotateImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getRotateImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getRotateImage(self, image, label):
+
+        return tf.image \
+                   .rot90(image,
+                          random.randrange(1, 91)), label
+
+    def getRandomHueImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getRandomHueImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getRandomHueImage(self, image, label):
+
+        rand = random.random()
+        if rand > 0.5: rand -= 0.5
+        return tf.image \
+                   .random_hue(image,
+                               rand), label
+
+    def getRandomSaturationImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getRandomSaturationImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getRandomSaturationImage(self, image, label):
+
+        return tf.image\
+                   .adjust_saturation(image, random.random()), label
+
+    def getRandomBrightImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getRandomBrightImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getRandomBrightImage(self, image, label):
+
+        return tf.image \
+                   .adjust_brightness(image,
+                                      random.random()), label
+
+    def getRandomContrastImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self._getRandomContrastImage, -1) \
+            .map(self.getResizedImage, -1)
+
+    def _getRandomContrastImage(self, image, label):
+
+        return tf.image \
+                   .adjust_contrast(image,
+                                    random.random()), label
+
+    def getRandomGammaImages(self):
+
+        return tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1) \
+            .map(self.getResizedImage, -1) \
+            .map(self._getRandomGammaImage, -1)
+
+    def _getRandomGammaImage(self, image, label):
+
+        return tf.image \
+                   .adjust_gamma(image,
+                                 random.random()+0.5), label
 
     def getRandomCropImage(self):
         """
         이미지 크기를 구할 수 없어서 일단 보류
         :return:
         """
-        filename = tempfile.mktemp('.tfrecord',
-                                   dir=self.newDirName)
+
         _dataset = tf.data.Dataset\
             .from_tensor_slices((self.all_image_paths,
                                  self.all_image_labels))\
             .map(self.readImages, -1)\
-            .map(self._getRandomCropImage, -1)\
-            .map(self.serialize, -1)
-
-        writer = tf.data.experimental.TFRecordWriter(filename)
-        writer.writer(_dataset)
+            .map(self._getRandomCropImage, -1)
 
     def _getRandomCropImage(self, image, label, img_shape):
 
@@ -271,62 +422,13 @@ class ImageAugmentation(ImagePipeline):
                    .random_crop(image,
                                 [cropSize, cropSize, 3]), label
 
-    def getRandomNoise(self, image, label):
-
-        rand = random.random()
-        if rand > 0.5: return image, label
-        return tf.image\
-                   .adjust_jpeg_quality(image, random.randrange(0, 101)), label
-
-    def getRandomFlip(self, image, label):
-
-        rand = random.random()
-        if rand > 2/3: return image, label
-        if rand > 1/3: return tf.image\
-                                  .random_flip_left_right(image), label
-        return tf.image.random_flip_up_down(image), label
-
-    def getRotation(self, image, label):
-
-        rand = random.random()
-        if rand > 0.5: return image, label
-        return tf.image.rot90(image, random.randrange(1, 91)), label
-
-    def getRandomHue(self, image, label):
-
-        rand = random.random()
-        if rand > 0.5: return image, label
-        return tf.image.random_hue(image, rand), label
-
-    def getRandomSaturation(self, image, label):
-
-        rand = random.random()
-        if rand > 0.5: return image, label
-        return tf.image\
-                   .adjust_saturation(image, random.random()), label
-
-    def getRandomBrightness(self, image, label):
-
-        rand = random.random()
-        if rand > 0.5: return image, label
-        return tf.image\
-                   .adjust_brightness(image, random.random()), label
-
-    def getRandomContrast(self, image, label):
-
-        rand = random.random()
-        if rand > 0.5: return image, label
-        return
-
-    def getRandomGamma(self, image, label):
-        return
-
 
 if __name__ == '__main__':
     # tf.enable_eager_execution()
     # /101_ObjectCategories : 9145
-    # test = ImageAugmentation('/101_ObjectCategories',
-    #                          'http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz')
-    # test.getDataset(height=224, width=224, channel=3)
+    test = ImageAugmentation('/101_ObjectCategories',
+                             'http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz',
+                             augmentedRate=2)
+    dt = test.getDataset(height=224, width=224, channel=3, batchsize=128)
 
     pass
