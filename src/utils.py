@@ -73,32 +73,36 @@ class ImagePipeline:
         self.labels = None
         self.height = None
         self.width = None
+        self.channel = None
         self.dataRoot = getfile(filename, url, dir_to_save)\
             if dataRoot is None else dataRoot
         self.isRawImage = isRawImage
 
-        self.all_image_paths = self.getAllImagePaths()
+        self.all_image_paths = None
         self.label_to_index = None
         self.all_image_labels = None
         self.labels = None
+
+        self.getAllImagePaths()
         self.labeling2images()
 
     def getAllImagePaths(self):
 
         all_image_paths = list(self.dataRoot.glob('*/*'))
+        self.all_image_paths = [str(path)
+                                for path in all_image_paths
+                                if 'Thumbs.db' not in str(path)]
 
-        return [str(path)
-                for path in all_image_paths
-                if 'Thumbs.db' not in str(path)]
+    # def getAllImageShape(self):
+    #
+    #     self.all_image_shape = [PIL.Image.open(path).size
+    #                             for path in self.all_image_paths]
 
     def labeling2images(self):
 
         label_names = sorted(item.name for item in self.dataRoot.glob('*/') if item.is_dir())
-
         self.label_to_index = dict((name, index) for index, name in enumerate(label_names))
-
         self.labels = len(label_names)
-
         self.all_image_labels = [self.label_to_index[pathlib.Path(path).parent.name]
                                  for path in self.all_image_paths]
 
@@ -107,7 +111,6 @@ class ImagePipeline:
         image = tf.image.decode_jpeg(
             tf.read_file(path)
         )
-
         if self.isRawImage:
             image = tf.image.resize_images(image, [self.height, self.width])
 
@@ -127,11 +130,12 @@ class ImagePipeline:
 
         return image
 
-    def getDataset(self, height, width, batchSize=128):
+    def getDataset(self, height, width, channel=3, batchSize=128):
         """
 
         :param height: image height to resize
         :param width: image width th resize
+        :param channel:
         :param batchSize: batch size
         :return:
         """
@@ -141,6 +145,7 @@ class ImagePipeline:
 
         self.height = height
         self.width = width
+        self.channel = channel
 
         dataset = tf.data.Dataset \
             .from_tensor_slices((self.all_image_paths,
@@ -172,7 +177,6 @@ class ImageAugmentation(ImagePipeline):
                  dir_to_save='images'):
 
         super().__init__(filename, url, False, dataRoot, dir_to_save)
-
         self.augmentedRate = augmentedRate
 
         self.parentDir = os.path.dirname(self.dataRoot)
@@ -180,45 +184,6 @@ class ImageAugmentation(ImagePipeline):
         self.newDirName = self.parentDir + self.dirName
 
         os.makedirs(self.newDirName, exist_ok=True)
-
-    def readImages(self, path, label):
-
-        return tf.image.decode_jpeg(
-            tf.read_file(path),
-            name='readRawImages'
-        ), label
-
-    # def readImages(self, path, label):
-    #     # open with binary
-    #     with open(path, 'rb') as file:
-    #         return file.read(), label
-
-    def getDataset(self, **kargs):
-
-        self.height = kargs['height']
-        self.width = kargs['width']
-
-        for _ in range(self.augmentedRate):
-            tf.data.Dataset \
-                .from_tensor_slices((self.all_image_paths,
-                                     self.all_image_labels)) \
-                .map(self.readImages, -1) \
-                .map(self.augmentImages, -1)
-
-    def augmentImages(self, image, label):
-
-        # filename = tempfile.mkdtemp('.tfrecord',
-        #                             dir=self.newDirName)
-        # writer = tf.data.experimental.TFRecordWriter(filename)
-        self.getRandomCropImage(image, label)
-
-    # def getCropImage(self, image, label):
-    #
-    #     rand = random.random()
-    #     if rand > 2/3: return image, label
-    #     if rand > 1/3: return self.getRandomCropImage(image, label)
-    #     return tf.image \
-    #                .central_crop(image, random.random), label
 
     def _float_feature(self, value):
         """Returns a float_list from a float / double."""
@@ -232,6 +197,27 @@ class ImageAugmentation(ImagePipeline):
         """Returns a bytes_list from a string / byte."""
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
+    def readImages(self, path, label):
+
+        return tf.image.decode_jpeg(
+            tf.read_file(path),
+            channels=self.channel,
+            name='readRawImages'
+        ), label
+
+    def getDataset(self, **kargs):
+
+        self.height = kargs['height']
+        self.width = kargs['width']
+        self.channel = kargs['channel']
+
+        for _ in range(self.augmentedRate):
+            self.augmentImages()
+
+    def augmentImages(self):
+
+        self.getResizedImage()
+
     def serialize(self, image, label):
 
         feature = {
@@ -241,25 +227,45 @@ class ImageAugmentation(ImagePipeline):
         example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
         return example_proto.SerializeToString()
 
-    def getRandomCropImage(self, image, label):
+    def getResizedImage(self):
 
         filename = tempfile.mktemp('.tfrecord',
                                    dir=self.newDirName)
-        # with tf.python_io.TFRecordWriter(filename) as writer:
-        #     writer.write()
-        print(image, label, '######')
+        _dataset = tf.data.Dataset \
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels)) \
+            .map(self.readImages, -1)\
+            .map(self._getResizedImage, -1)\
+            .map(self.serialize, -1)
+        writer = tf.data.experimental.TFRecordWriter(filename)
+        writer.write(_dataset)
+
+    def _getResizedImage(self, image, label):
+
+        return tf.image \
+                   .resize_images(image, [self.width,
+                                          self.height]), label
+
+    def getRandomCropImage(self):
+        """
+        이미지 크기를 구할 수 없어서 일단 보류
+        :return:
+        """
+        filename = tempfile.mktemp('.tfrecord',
+                                   dir=self.newDirName)
         _dataset = tf.data.Dataset\
-            .from_tensor_slices((image, label))\
-            .map(self._getRandomCropImage)\
-            .map(self.serialize)
+            .from_tensor_slices((self.all_image_paths,
+                                 self.all_image_labels))\
+            .map(self.readImages, -1)\
+            .map(self._getRandomCropImage, -1)\
+            .map(self.serialize, -1)
 
         writer = tf.data.experimental.TFRecordWriter(filename)
         writer.writer(_dataset)
-        print('asd')
 
-    def _getRandomCropImage(self, image, label):
+    def _getRandomCropImage(self, image, label, img_shape):
 
-        h, w, _ = image.shape
+        w, h = img_shape
         cropSize = min(h, w, self.height, self.height)
         return tf.image \
                    .random_crop(image,
@@ -315,14 +321,12 @@ class ImageAugmentation(ImagePipeline):
     def getRandomGamma(self, image, label):
         return
 
-    def getResizedImage(self, image):
-        pass
-
 
 if __name__ == '__main__':
     # tf.enable_eager_execution()
     # /101_ObjectCategories : 9145
-    test = ImageAugmentation('/101_ObjectCategories',
-                             'http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz')
-    test.getDataset(height=224, width=224)
+    # test = ImageAugmentation('/101_ObjectCategories',
+    #                          'http://www.vision.caltech.edu/Image_Datasets/Caltech101/101_ObjectCategories.tar.gz')
+    # test.getDataset(height=224, width=224, channel=3)
+
     pass
