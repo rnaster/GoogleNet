@@ -1,7 +1,7 @@
 # TODO: 한글주석 -> 영어로, licence 만들기(MIT??)
 import tensorflow as tf
 
-from src.utils import ParsingJson, ImageProcessing
+from src.utils import ParsingJson, ImagePipeline
 
 
 class GoogleNet:
@@ -13,6 +13,8 @@ class GoogleNet:
         self.outputY = None
         self.datasetInit = None
         self.loss = None
+        self.labels = None
+        self.accuracy = None
         self._dropOut_rate_main = None
         self._dropOut_rate_auxiliary = None
         self.isTrain = None
@@ -24,10 +26,33 @@ class GoogleNet:
                                                 _image['channel']
 
         _hyperparameter = self.architecture['hyperparameter']
+
         self.batchSize = _hyperparameter['batchSize']
+        self.learning_rate = _hyperparameter['learningrate']
 
         self.all_image_paths = None
         self.all_image_labels = None
+
+    def getAccuracy(self, predicted, actual):
+        """
+
+        :param predicted: softmax value
+        :param actual: one hot encoding value
+        :return:
+        """
+
+        predictedLabel = tf.argmax(predicted,
+                                   axis=1,
+                                   name='predictedLabel')
+        # actualLabel = tf.argmax(actual,
+        #                         axis=1,
+        #                         name='actualLabel')
+
+        return tf.math.reduce_mean(
+            tf.math.reduce_sum(
+                tf.one_hot(predictedLabel, self.labels) * actual, axis=1
+            ), name='accuracy'
+        )
 
     def train(self):
         # TODO: 학습 후 모델 저장
@@ -39,34 +64,33 @@ class GoogleNet:
 
         _epoch = _hyperparameter['epoch']
 
-        _learning_rate = _hyperparameter['learningrate']
-
         _dropOut = _hyperparameter['dropout']
         _dropOut_rate_main = _dropOut['main']
         _dropOut_rate_auxiliary = _dropOut['auxiliary']
 
+        learning_rate = tf.placeholder(tf.float32)
+
         if _optimizer == 'SGD':
-            optimizer = tf.train.GradientDescentOptimizer(_learning_rate)\
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate)\
                 .minimize(self.loss)
         else:
-            optimizer = tf.train.AdamOptimizer(_learning_rate)\
+            optimizer = tf.train.AdamOptimizer(learning_rate)\
                 .minimize(self.loss)
 
-        # dataset = ImageProcessing(filename, url, self.channel)\
-        #     .getDataset(self.height, self.width, self.batchSize)
-        
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            _loss = None
+            _loss, _accuracy = None, None
             for epoch in range(1, _epoch+1):
                 sess.run(self.datasetInit)
                 for step in range(len(self.all_image_paths)//self.batchSize + 1):
-                    _, _loss = sess.run([optimizer, self.loss],
-                                        feed_dict={self._dropOut_rate_main: _dropOut_rate_main,
-                                                   self._dropOut_rate_auxiliary: _dropOut_rate_auxiliary,
-                                                   self.isTrain: True})
+                    _, _loss, _accuracy = sess.run([optimizer, self.loss, self.accuracy],
+                                                   feed_dict={self._dropOut_rate_main: _dropOut_rate_main,
+                                                              self._dropOut_rate_auxiliary: _dropOut_rate_auxiliary,
+                                                              self.isTrain: True,
+                                                              learning_rate: self.learning_rate})
 
-                print('epoch: %s, train loss: %s' % (epoch, _loss))
+                print('epoch: %s, accuracy: %s, train loss: %s' % (epoch, _accuracy, _loss))
+                if epoch % 4 == 0: self.learning_rate *= 0.96
 
     def predict(self):
         # 저장된 모델 불러와 test 데이터로 예측
@@ -74,14 +98,14 @@ class GoogleNet:
 
     def dataFlow(self, filename, url):
 
-        imageProcessing = ImageProcessing(filename, url, self.channel)
-
+        imageProcessing = ImagePipeline(filename, url, self.channel)
 
         dataset = imageProcessing \
             .getDataset(self.height, self.width, self.batchSize)
 
         self.all_image_paths = imageProcessing.all_image_paths
         self.all_image_labels = imageProcessing.all_image_labels
+        self.labels = imageProcessing.labels
 
         iterator = dataset.make_initializable_iterator()
 
@@ -93,16 +117,7 @@ class GoogleNet:
 
     def buildGraph(self, filename, url):
 
-        # _label = self.architecture['label']
-        #
-        # num_labels = _label['class']
-
-        # self.inputX = tf.placeholder(tf.float32,
-        #                              [None, self.width, self.height, self.channel],
-        #                              name='inputX')
-        # self.outputY = tf.placeholder(tf.float32,
-        #                               [None, num_labels],
-        #                               name='outputY')
+        tf.reset_default_graph()
 
         inputX, outputY = self.dataFlow(filename, url)
 
@@ -482,6 +497,9 @@ class GoogleNet:
 
             _previous_layer = self.softmax(_previous_layer)
 
+            if not config['auxiliary']:
+                self.accuracy = self.getAccuracy(_previous_layer, output)
+
             return self.getCrossEntropy(_previous_layer,
                                         output) * rate
 
@@ -505,7 +523,7 @@ class GoogleNet:
         """
 
         return -tf.reduce_mean(
-            tf.reduce_sum(tf.log(outputs) * labels,
+            tf.reduce_sum(tf.log(outputs + 1e-7) * labels,
                           axis=1),
             name='crossEntropy'
         )
