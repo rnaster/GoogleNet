@@ -301,7 +301,7 @@
 
           "fc2": {
             "num_outputs": 102,
-            "activation_fn": "relu"
+            "activation_fn": "none"
           }
         }
       }
@@ -540,7 +540,7 @@
 
           "fc2": {
             "num_outputs": 102,
-            "activation_fn": "relu"
+            "activation_fn": "none"
           }
         }
       }
@@ -775,7 +775,7 @@
 
           "fc1": {
             "num_outputs": 102,
-            "activation_fn": "relu"
+            "activation_fn": "none"
           }
         }
       }
@@ -784,11 +784,11 @@
 
   "hyperparameter": {
     "dropout": {
-      "main": 0.4,
+      "main": 0.5,
       "auxiliary": 0.3
     },
 
-    "learningrate": 1e-03,
+    "learningrate": 1e-01,
 
     "optimizer": "ADAM",
 

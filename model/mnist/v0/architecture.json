@@ -1,0 +1,109 @@
+{
+  "image": {
+    "width": 28,
+    "height": 28,
+    "channel": 1
+  },
+
+  "label": {
+    "class": 10
+  },
+
+  "layers": {
+    "layer1": {
+      "convolution": {
+        "conv": {
+          "height": 3,
+          "width": 3,
+          "channel": 32,
+          "stride": 1,
+          "padding": "SAME",
+          "batchNorm": false
+        }
+      },
+
+      "maxpooling": {
+        "height": 2,
+        "width": 2,
+        "stride": 2,
+        "padding": "SAME"
+      }
+    },
+
+    "layer2": {
+      "convolution": {
+        "conv": {
+          "height": 3,
+          "width": 3,
+          "channel": 64,
+          "stride": 1,
+          "padding": "SAME",
+          "batchNorm": false
+        }
+      },
+
+      "maxpooling": {
+        "height": 2,
+        "width": 2,
+        "stride": 2,
+        "padding": "SAME"
+      }
+    },
+
+    "layer3": {
+      "convolution": {
+        "conv": {
+          "height": 3,
+          "width": 3,
+          "channel": 128,
+          "stride": 2,
+          "padding": "SAME",
+          "batchNorm": false
+        }
+      },
+
+      "maxpooling": {
+        "height": 3,
+        "width": 3,
+        "stride": 1,
+        "padding": "SAME"
+      }
+    },
+
+    "layer4": {
+      "getLoss": {
+        "auxiliary": false,
+
+        "loss": {
+
+          "flatten": true,
+
+          "fc0": {
+            "num_outputs": 64,
+            "activation_fn": "relu"
+          },
+
+          "fc1": {
+            "num_outputs": 10,
+            "activation_fn": "none"
+          }
+        }
+      }
+    }
+  },
+
+  "hyperparameter": {
+    "dropout": {
+      "main": 0.9,
+      "auxiliary": 0.3
+    },
+
+    "learningrate": 1e-04,
+
+    "optimizer": "SGD",
+
+    "batchSize": 100,
+
+    "epoch": 15
+  }
+}
